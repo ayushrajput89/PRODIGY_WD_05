@@ -36,14 +36,16 @@ cityInput.addEventListener('keydown', (event) => {
       }
 })
 
-async function  getFetchData(endPoint, city) {
+async function getFetchData(endPoint, city) {
+    const apiUrl = `https://api.openweathermap.org/data/2.5/${endPoint}?q=${city}&appid=${apiKey}&units=metric`
 
-    const apiUrl = `http://api.openweathermap.org/data/2.5/${endPoint}?q=${city}&appid=${apiKey}&units=metric`
-
-
-    const response = await fetch(apiUrl)
-
-    return response.json()
+    try {
+        const response = await fetch(apiUrl)
+        return response.json()
+    } catch (error) {
+        console.error("Error fetching data:", error)
+        return { cod: "error" }
+    }
 }
 
 function getWeatherIcon(id)  {
@@ -83,7 +85,7 @@ function getCurrentDate() {
       const{
                name: country,
                 main: {temp, humidity },
-                weather: [{ id, main }],
+                weather: [{ main, icon }],
                 wind: {speed},
 
           } = weatherData
@@ -97,7 +99,7 @@ function getCurrentDate() {
 
          currentDateTxt.textContent = getCurrentDate()
 
-         weatherSummaryImg.src = `assets/weather/${getWeatherIcon(id)}`
+         weatherSummaryImg.src = `https://openweathermap.org/img/wn/${icon}@4x.png`
 
 
           await updateForecastsInfo(city)
@@ -110,26 +112,36 @@ function getCurrentDate() {
  async function updateForecastsInfo(city) {
      const forecastsData = await getFetchData('forecast', city)
 
-     const timeTaken = '12:00:00'
+     if (forecastsData.cod != "200") return;
+
      const todayDate = new Date().toISOString().split('T')[0]
- 
-    forecastItemsContainer.innerHTML = ''
+     const uniqueDays = new Set();
+     let dailyForecasts = [];
+
      forecastsData.list.forEach(forecastWeather => {
-        if (forecastWeather.dt_txt.includes(timeTaken) && 
-             !forecastWeather.dt_txt.includes(todayDate)) {
-              updateForecastItems(forecastWeather)
+        const date = forecastWeather.dt_txt.split(' ')[0];
+        if (date !== todayDate) {
+            if (!uniqueDays.has(date)) {
+                uniqueDays.add(date);
+                dailyForecasts.push(forecastWeather); // Default to first available
+            } else if (forecastWeather.dt_txt.includes('12:00:00')) {
+                // Override with midday forecast if we find it
+                dailyForecasts[dailyForecasts.length - 1] = forecastWeather;
+            }
         }
-        
-     })
-  
-     
+     });
+
+     forecastItemsContainer.innerHTML = '';
+     dailyForecasts.slice(0, 5).forEach(forecast => {
+         updateForecastItems(forecast);
+     });
 }
 
 function updateForecastItems(weatherData) {
         console.log(weatherData)
         const {
             dt_txt: date,
-            weather: [{ id }],
+            weather: [{ icon }],
             main: { temp },
         } = weatherData
 
@@ -144,7 +156,7 @@ function updateForecastItems(weatherData) {
         const forecastItem = `
         <div class="forecast-item">
              <h5 class="forecast-item-date regular-txt">${dateResult}</h5>
-             <img src="assets/weather/${getWeatherIcon(id)}" class="forecast-item-img">
+             <img src="https://openweathermap.org/img/wn/${icon}@2x.png" class="forecast-item-img" alt="Weather Icon">
              <h5 class="forecast-item-temp">${Math.round(temp)} ℃</h5>
         </div>
         `
